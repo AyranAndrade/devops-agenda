@@ -76,6 +76,7 @@
          dest: /home/ubuntu/agenda/src/main/resources/application-production.properties
          
     - name: Executing the project
-      shell: sudo nohup mvn spring-boot:run -Dspring.profiles.active=production &
+      become: yes
+      shell: nohup mvn spring-boot:run -Dspring.profiles.active=production &
       args:
          chdir: /home/ubuntu/agenda
