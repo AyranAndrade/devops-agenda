@@ -1,0 +1,87 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: False
+
+  tasks:
+    - name: Creating machines
+      ec2:
+         region: "{{region}}"
+         key_name: agenda-gupy-aws-educate-starter
+         group_id: sg-6c5d671f
+         instance_type: t2.micro
+         image: ami-cd0f5cb6
+         wait: true
+         count: "{{count}}"
+         instance_tags:
+            Name: Demo
+      register: ec2
+
+    - name: Adding all machines public IPs to host group
+      add_host: hostname={{ item.public_ip }} groups=ec2hosts
+      with_items: "{{ ec2.instances }}"
+
+    - name: Waiting for SSH to come up
+      wait_for:
+        host: "{{ item.public_ip }}"
+        port: 22
+        delay: 60
+        timeout: 320
+        state: started
+      with_items: "{{ ec2.instances }}"
+
+- hosts: ec2hosts
+  name: Configuring machines
+  remote_user: ubuntu
+  gather_facts: false
+  pre_tasks:
+    - name: 'Updating each system'
+      raw: sudo apt-get update
+    - name: 'Installing python2'
+      raw: sudo apt-get -y install python-simplejson
+
+  tasks:
+    - name: Installing openjdk-8-jdk
+      become: yes
+      apt:
+        name: openjdk-8-jdk
+        state: latest
+        install_recommends: no
+
+    - name: Installing maven
+      become: yes
+      apt:
+        name: maven
+        state: latest
+        install_recommends: no
+
+    - name: Creating the folder agenda
+      file:
+         path: /home/ubuntu/agenda
+         state: directory
+     
+    - name: Allowing agent forwarding
+      become: yes
+      lineinfile:
+               path: /etc/ssh/sshd_config
+               line: 'AllowAgentForwarding yes'
+
+    - name: Cloning project
+      git:
+        repo: "git@github.com:AyranAndrade/agenda.git"
+        dest: "/home/ubuntu/agenda"
+        version: "{{branch}}"
+        accept_hostkey: yes
+        force: yes
+        key_file: /home/gupy/.ssh/id_rsa
+          
+    - name: Copying the configuration file
+      become: yes
+      copy:
+         src: /home/gupy/Java/agenda/src/main/resources/application-production.properties
+         dest: /home/ubuntu/agenda/src/main/resources/application-production.properties
+         
+    - name: Executing the project
+      shell: sudo nohup mvn spring-boot:run -Dspring.profiles.active=production &
+      args:
+         chdir: /home/ubuntu/agenda
