@@ -60,12 +60,6 @@
          path: /home/ubuntu/agenda
          state: directory
      
-    - name: Allowing agent forwarding
-      become: yes
-      lineinfile:
-               path: /etc/ssh/sshd_config
-               line: 'AllowAgentForwarding yes'
-
     - name: Cloning project
       become: yes
       git:
